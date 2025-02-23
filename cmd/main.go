@@ -43,7 +43,7 @@ func Start() {
 		hasPrefix := strings.HasPrefix(filePath, prefix)
 
 		if !hasPrefix {
-			filePath = path.Join("static", r.URL.Path)
+			filePath = path.Join(prefix, r.URL.Path)
 		}
 
 		file, err := os.ReadFile(filePath)
