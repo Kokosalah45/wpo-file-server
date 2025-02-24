@@ -2,12 +2,11 @@ package app
 
 import (
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
-	"strings"
 )
 
 var fileCacheStrategyConfig = map[string]string{
@@ -31,21 +30,36 @@ var mimeTypes = map[string]string{
 }
 var mux = http.NewServeMux()
 
-func Start() {
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+type WeatherConfig struct {
+	Rain int `json:"rain"`
+	Snow int `json:"snow"`
+	Sun int `json:"sun"`
+	Heat int `json:"heat"`
+	Wind int `json:"wind"`
+	
+}
 
-		const prefix = "static"
+func Start() {
+	mux.HandleFunc("/config/", func(w http.ResponseWriter, r *http.Request) {
+
+		w.Header().Add("Cache-Control", "max-age=120, must-revalidate")
+		w.Header().Add("Content-Type", "application/json")
+		config := WeatherConfig{
+			Rain: 10,
+			Snow: 20,
+			Sun: 30,
+			Heat: 40,
+			Wind: 50,
+		}
+		jsonEncoder := json.NewEncoder(w)
+		jsonEncoder.Encode(config)
+	})
+
+	mux.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+
 		filePath := r.URL.Path[1:]
 
-		fmt.Println("Request URL: ", r.URL.Path)
-		fmt.Println("File Path: ", filePath)
-
-		hasPrefix := strings.HasPrefix(filePath, prefix)
-
-		if !hasPrefix {
-			filePath = path.Join(prefix, r.URL.Path)
-		}
-
+		fmt.Println(filePath)
 		file, err := os.ReadFile(filePath)
 
 		if err != nil {
@@ -55,14 +69,15 @@ func Start() {
 		etag := r.Header.Get("If-None-Match")
 
 		fileMd5 := fmt.Sprintf("%x", md5.Sum(file))
-		cacheControlConfig := "no-cache"
+		fileExt := filepath.Ext(filePath)
+		cacheControlConfig := fileCacheStrategyConfig[fileExt]
 
 
 		if etag == fileMd5 {
 			w.Header().Add("Cache-Control", cacheControlConfig)
 			w.Header().Add("Etag", fileMd5)
 			w.Header().Add("Content-Length", fmt.Sprintf("%d", len(file)))
-			w.Header().Add("Content-Type" ,  mimeTypes[filepath.Ext(filePath)])
+			w.Header().Add("Content-Type" ,  mimeTypes[fileExt])
 			w.WriteHeader(http.StatusNotModified)
 
 			return 
